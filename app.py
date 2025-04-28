@@ -297,7 +297,7 @@ def customer_payment_methods(df):
 
 
 def main():
-    st.title("🚖 Union App Executive Dashboard")
+    st.title("✅ Union App Metrics Dashboard")
 
     # Check if data file exists
     try:
@@ -333,7 +333,7 @@ def main():
 
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Total Trips", len(df))
+                st.metric("Total Requests", len(df))
             with col2:
                 completed_trips = len(df[df['Trip Status'] == 'Job Completed'])
                 st.metric("Completed Trips", completed_trips)
@@ -356,7 +356,7 @@ def main():
             total_commission(df)
             total_trips_by_type(df)
             revenue_share(df)
-            total_payout_to_drivers(df)
+            total_Commission_Paid_by_drivers(df)
             fare_per_km(df)
 
         with tab3:  # User Analysis Tab
