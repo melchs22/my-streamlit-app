@@ -8,6 +8,7 @@ import requests
 import os
 import re
 from dotenv import load_dotenv
+import io
 
 # Load environment variables
 load_dotenv()
@@ -585,6 +586,15 @@ def passenger_value_segmentation(df):
         st.plotly_chart(fig, use_container_width=True)
 
 
+def get_download_data(df):
+    """Prepare the data for download with all cleaned columns"""
+    # Create a copy of the dataframe to avoid modifying the original
+    download_df = df.copy()
+
+    # Add any additional processing if needed
+    return download_df
+
+
 def main():
     st.title("Union App Metrics Dashboard")
 
@@ -613,6 +623,28 @@ def main():
         if len(date_range) == 2:
             df = df[(df['Trip Date'].dt.date >= date_range[0]) &
                     (df['Trip Date'].dt.date <= date_range[1])]
+
+        # Add download button to sidebar
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Export Data")
+
+        # Create a buffer to hold the Excel file
+        output = io.BytesIO()
+
+        # Use ExcelWriter to write the DataFrame to the buffer
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            get_download_data(df).to_excel(writer, sheet_name='Dashboard Data', index=False)
+
+        # Get the Excel data from the buffer
+        excel_data = output.getvalue()
+
+        # Create download button
+        st.sidebar.download_button(
+            label="📊 Download Full Data (Excel)",
+            data=excel_data,
+            file_name=f"union_app_metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
         # Create tabs
         tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Financial", "User Analysis", "Geographic"])
