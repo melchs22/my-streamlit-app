@@ -3,3 +3,4 @@ plotly
 python-dotenv
 openpyxl
 statsmodels
+xlsxwriter
