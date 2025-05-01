@@ -52,8 +52,8 @@ st.markdown("""
 DATA_FILE_PATH = r"./DIBYA.xlsx"
 
 # Define backend configuration for user base metrics
-TOTAL_RIDERS = 2514  # Set your total rider pool size here
-TOTAL_PASSENGERS = 154  # Set your total passenger base here
+TOTAL_RIDERS = 2806  # Set your total rider pool size here
+TOTAL_PASSENGERS = 158  # Set your total passenger base here
 
 
 @st.cache_data
