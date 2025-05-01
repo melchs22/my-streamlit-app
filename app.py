@@ -9,6 +9,8 @@ import os
 import re
 from dotenv import load_dotenv
 import io
+from fpdf import FPDF
+import base64
 
 # Load environment variables
 load_dotenv()
@@ -47,7 +49,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Define the data file path (backend only)
-DATA_FILE_PATH = r"./MORAN.xlsx"
+DATA_FILE_PATH = r"./DIBYA.xlsx"
+
+# Define backend configuration for user base metrics
+TOTAL_RIDERS = 2514  # Set your total rider pool size here
+TOTAL_PASSENGERS = 154  # Set your total passenger base here
 
 
 @st.cache_data
@@ -214,6 +220,25 @@ def completed_vs_cancelled_daily(df):
     return fig
 
 
+def calculate_driver_retention_rate(total_riders, total_passengers, unique_drivers):
+    """
+    Calculate driver retention rate based on backend inputs
+    Formula: (Unique Drivers / Total Riders) * 100
+    Also calculates Driver-to-Passenger ratio
+    """
+    if total_riders > 0:
+        retention_rate = (unique_drivers / total_riders) * 100
+    else:
+        retention_rate = 0
+
+    if unique_drivers > 0:
+        passenger_ratio = total_passengers / unique_drivers
+    else:
+        passenger_ratio = 0
+
+    return retention_rate, passenger_ratio
+
+
 def total_trips_by_status(df):
     if 'Trip Status' in df.columns:
         status_counts = df['Trip Status'].value_counts().reset_index()
@@ -332,21 +357,9 @@ def total_commission(df):
     st.metric("Total Commission", f"{total_commission:,.0f} UGX")
 
 
-def unique_passenger_count(df):
-    unique_passengers = df['Passenger'].nunique()
-    st.metric("Number of Unique Passengers", unique_passengers)
-
-
 def unique_driver_count(df):
     unique_drivers = df['Driver'].nunique()
     st.metric("Number of Unique Drivers", unique_drivers)
-
-
-def top_10_passengers_by_spend(df):
-    top_passengers = df.groupby('Passenger').agg({'Trip Pay Amount Cleaned': 'sum'}).nlargest(10,
-                                                                                              'Trip Pay Amount Cleaned')
-    st.subheader("Top 10 Passengers by Spend")
-    st.dataframe(top_passengers)
 
 
 def top_10_drivers_by_earnings(df):
@@ -415,7 +428,7 @@ def gross_profit(df):
     total_revenue = df['Trip Pay Amount Cleaned'].sum()
     total_commission = df['Company Commission Cleaned'].sum()
     gross_profit = total_revenue - total_commission
-    st.metric("Gross Profit", f"{gross_profit:,.0f} UGX")
+    st.metric("Rider Revenue", f"{gross_profit:,.0f} UGX")
 
 
 def avg_commission_per_trip(df):
@@ -438,16 +451,6 @@ def revenue_per_driver(df):
         st.metric("Revenue per Driver", "N/A")
 
 
-def revenue_per_passenger(df):
-    total_revenue = df['Trip Pay Amount Cleaned'].sum()
-    unique_passengers = df['Passenger'].nunique()
-    if unique_passengers > 0:
-        revenue_per_passenger = total_revenue / unique_passengers
-        st.metric("Revenue per Passenger", f"{revenue_per_passenger:,.0f} UGX")
-    else:
-        st.metric("Revenue per Passenger", "N/A")
-
-
 def driver_earnings_per_trip(df):
     total_revenue = df['Trip Pay Amount Cleaned'].sum()
     total_commission = df['Company Commission Cleaned'].sum()
@@ -459,18 +462,6 @@ def driver_earnings_per_trip(df):
         st.metric("Driver Earnings per Trip", "N/A")
 
 
-def repeat_passenger_rate(df):
-    if 'Passenger' in df.columns:
-        passenger_trip_counts = df['Passenger'].value_counts()
-        repeat_passengers = (passenger_trip_counts > 1).sum()
-        total_passengers = len(passenger_trip_counts)
-        if total_passengers > 0:
-            rate = (repeat_passengers / total_passengers) * 100
-            st.metric("Repeat Passenger Rate", f"{rate:.1f}%")
-        else:
-            st.metric("Repeat Passenger Rate", "N/A")
-
-
 def trips_per_driver(df):
     if 'Driver' in df.columns:
         num_trips = len(df)
@@ -480,17 +471,6 @@ def trips_per_driver(df):
             st.metric("Avg. Trips per Driver", f"{trips_per_driver:.1f}")
         else:
             st.metric("Avg. Trips per Driver", "N/A")
-
-
-def trips_per_passenger(df):
-    if 'Passenger' in df.columns:
-        num_trips = len(df)
-        unique_passengers = df['Passenger'].nunique()
-        if unique_passengers > 0:
-            trips_per_passenger = num_trips / unique_passengers
-            st.metric("Avg. Trips per Passenger", f"{trips_per_passenger:.1f}")
-        else:
-            st.metric("Avg. Trips per Passenger", "N/A")
 
 
 def payment_method_revenue(df):
@@ -595,6 +575,93 @@ def get_download_data(df):
     return download_df
 
 
+def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio):
+    """Create a PDF report of all dashboard metrics"""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
+    # Title
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, txt="Union App Metrics Dashboard Report", ln=1, align='C')
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"Date Range: {date_range[0]} to {date_range[1]}", ln=1, align='C')
+    pdf.ln(10)
+
+    # Overview Section
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt="1. Overview Metrics", ln=1)
+    pdf.set_font("Arial", size=12)
+
+    # Calculate metrics
+    total_trips = len(df)
+    completed_trips = len(df[df['Trip Status'] == 'Job Completed'])
+    avg_distance = df['Distance'].mean() if 'Distance' in df.columns else 0
+    cancellation_rate = calculate_cancellation_rate(df) or 0
+    timeout_rate = calculate_passenger_search_timeout(df) or 0
+    unique_drivers = df['Driver'].nunique() if 'Driver' in df.columns else 0
+    trips_per_driver = total_trips / unique_drivers if unique_drivers > 0 else 0
+
+    # Add metrics to PDF
+    pdf.cell(200, 10, txt=f"Total Requests: {total_trips}", ln=1)
+    pdf.cell(200, 10, txt=f"Completed Trips: {completed_trips}", ln=1)
+    pdf.cell(200, 10, txt=f"Average Distance: {avg_distance:.1f} km", ln=1)
+    pdf.cell(200, 10, txt=f"Driver Cancellation Rate: {cancellation_rate:.1f}%", ln=1)
+    pdf.cell(200, 10, txt=f"Passenger Search Timeout: {timeout_rate:.1f}%", ln=1)
+    pdf.cell(200, 10, txt=f"Driver Retention Rate: {retention_rate:.1f}%", ln=1)
+    pdf.cell(200, 10, txt=f"Driver-to-Passenger Ratio: {passenger_ratio:.1f}", ln=1)
+    pdf.cell(200, 10, txt=f"Average Trips per Driver: {trips_per_driver:.1f}", ln=1)
+
+    # Financial Section
+    pdf.ln(10)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt="2. Financial Metrics", ln=1)
+    pdf.set_font("Arial", size=12)
+
+    total_revenue = df['Trip Pay Amount Cleaned'].sum()
+    total_commission = df['Company Commission Cleaned'].sum()
+    gross_profit = total_revenue - total_commission
+    avg_revenue = df['Trip Pay Amount Cleaned'].mean()
+    avg_commission = total_commission / total_trips if total_trips > 0 else 0
+    revenue_per_driver = total_revenue / unique_drivers if unique_drivers > 0 else 0
+    earnings_per_trip = gross_profit / total_trips if total_trips > 0 else 0
+    fare_per_km = total_revenue / df['Distance'].sum() if df['Distance'].sum() > 0 else 0
+    revenue_share = (total_commission / total_revenue * 100) if total_revenue > 0 else 0
+
+    pdf.cell(200, 10, txt=f"Total Value of Rides: {total_revenue:,.0f} UGX", ln=1)
+    pdf.cell(200, 10, txt=f"Total Commission: {total_commission:,.0f} UGX", ln=1)
+    pdf.cell(200, 10, txt=f"Rider Revenue: {gross_profit:,.0f} UGX", ln=1)
+    pdf.cell(200, 10, txt=f"Average Revenue per Trip: {avg_revenue:,.0f} UGX", ln=1)
+    pdf.cell(200, 10, txt=f"Average Commission per Trip: {avg_commission:,.0f} UGX", ln=1)
+    pdf.cell(200, 10, txt=f"Revenue per Driver: {revenue_per_driver:,.0f} UGX", ln=1)
+    pdf.cell(200, 10, txt=f"Driver Earnings per Trip: {earnings_per_trip:,.0f} UGX", ln=1)
+    pdf.cell(200, 10, txt=f"Fare per Kilometer/Mile: {fare_per_km:,.2f} UGX", ln=1)
+    pdf.cell(200, 10, txt=f"Revenue Share (Company vs Driver): {revenue_share:.2f}%", ln=1)
+
+    # User Analysis Section
+    pdf.ln(10)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(200, 10, txt="3. User Analysis Metrics", ln=1)
+    pdf.set_font("Arial", size=12)
+
+    pdf.cell(200, 10, txt=f"Number of Unique Drivers: {unique_drivers}", ln=1)
+    pdf.cell(200, 10, txt=f"Total Rider: {TOTAL_RIDERS}", ln=1)
+    pdf.cell(200, 10, txt=f"Total Passengers: {TOTAL_PASSENGERS}", ln=1)
+
+    # Top Drivers
+    pdf.ln(5)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(200, 10, txt="Top 10 Drivers by Earnings:", ln=1)
+    pdf.set_font("Arial", size=10)
+
+    if 'Driver' in df.columns and 'Trip Pay Amount Cleaned' in df.columns:
+        top_drivers = df.groupby('Driver')['Trip Pay Amount Cleaned'].sum().nlargest(10)
+        for i, (driver, amount) in enumerate(top_drivers.items(), 1):
+            pdf.cell(200, 7, txt=f"{i}. {driver}: {amount:,.0f} UGX", ln=1)
+
+    return pdf
+
+
 def main():
     st.title("Union App Metrics Dashboard")
 
@@ -624,7 +691,15 @@ def main():
             df = df[(df['Trip Date'].dt.date >= date_range[0]) &
                     (df['Trip Date'].dt.date <= date_range[1])]
 
-        # Add download button to sidebar
+        # Calculate unique drivers from data
+        unique_drivers = df['Driver'].nunique() if 'Driver' in df.columns else 0
+
+        # Calculate driver retention metrics using backend-defined values
+        retention_rate, passenger_ratio = calculate_driver_retention_rate(
+            TOTAL_RIDERS, TOTAL_PASSENGERS, unique_drivers
+        )
+
+        # Add download buttons to sidebar
         st.sidebar.markdown("---")
         st.sidebar.subheader("Export Data")
 
@@ -638,12 +713,24 @@ def main():
         # Get the Excel data from the buffer
         excel_data = output.getvalue()
 
-        # Create download button
+        # Create Excel download button
         st.sidebar.download_button(
             label="📊 Download Full Data (Excel)",
             data=excel_data,
             file_name=f"union_app_metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # Create PDF report
+        pdf = create_metrics_pdf(df, date_range, retention_rate, passenger_ratio)
+        pdf_output = pdf.output(dest='S').encode('latin1')
+
+        # Create PDF download button
+        st.sidebar.download_button(
+            label="📄 Download Metrics Report (PDF)",
+            data=pdf_output,
+            file_name=f"union_app_metrics_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+            mime="application/pdf"
         )
 
         # Create tabs
@@ -687,9 +774,11 @@ def main():
             with col6:
                 trips_per_driver(df)
             with col7:
-                trips_per_passenger(df)
+                st.metric("Driver Retention Rate", f"{retention_rate:.1f}%",
+                          help="Percentage of total riders who are active drivers")
             with col8:
-                repeat_passenger_rate(df)
+                st.metric("Driver-to-Passenger Ratio", f"{passenger_ratio:.1f}",
+                          help="Number of passengers per active driver")
 
             total_trips_by_status(df)
             total_distance_covered(df)
@@ -716,15 +805,15 @@ def main():
             with col5:
                 revenue_per_driver(df)
             with col6:
-                revenue_per_passenger(df)
+                driver_earnings_per_trip(df)
 
             col7, col8, col9 = st.columns(3)
             with col7:
-                driver_earnings_per_trip(df)
-            with col8:
                 fare_per_km(df)
-            with col9:
+            with col8:
                 revenue_share(df)
+            with col9:
+                st.metric("Total Riders (Pool Size)", TOTAL_RIDERS)
 
             # Financial visualizations
             total_trips_by_type(df)
@@ -736,17 +825,27 @@ def main():
             st.header("User Performance")
 
             # User metrics in columns
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
-                unique_passenger_count(df)
-            with col2:
                 unique_driver_count(df)
+            with col2:
+                st.metric("Total Riders (Pool Size)", TOTAL_RIDERS)
+            with col3:
+                st.metric("Total Passengers (Base)", TOTAL_PASSENGERS)
+
+            # Display retention metrics
+            col4, col5 = st.columns(2)
+            with col4:
+                st.metric("Driver Retention Rate", f"{retention_rate:.1f}%",
+                          help="Percentage of total riders who are active drivers")
+            with col5:
+                st.metric("Passenger-to-Driver Ratio", f"{passenger_ratio:.1f}",
+                          help="Number of passengers per active driver")
 
             # User visualizations
             top_drivers_by_revenue(df)
             driver_performance_comparison(df)
             passenger_insights(df)
-            top_10_passengers_by_spend(df)
             passenger_value_segmentation(df)
             top_10_drivers_by_earnings(df)
 
