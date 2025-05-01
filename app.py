@@ -49,11 +49,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Define the data file path (backend only)
-DATA_FILE_PATH = r"./DIBYA.xlsx"
+DATA_FILE_PATH = r"./newyork.xlsx"
 
 # Define backend configuration for user base metrics
-TOTAL_RIDERS = 2806  # Set your total rider pool size here
-TOTAL_PASSENGERS = 158  # Set your total passenger base here
+TOTAL_RIDERS = 3064  # Set your total rider pool size here
+TOTAL_PASSENGERS = 194  # Set your total passenger base here
 
 
 @st.cache_data
