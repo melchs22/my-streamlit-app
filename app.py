@@ -19,7 +19,7 @@ OPENCAGE_API_KEY = os.getenv('OPENCAGE_API_KEY')
 # Configure page
 st.set_page_config(
     page_title="Union App Metrics Dashboard",
-    page_icon=r"C:\Users\TUTU\PyCharmMiscProject\your_image.png",
+    page_icon= r"./your_imge.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -50,10 +50,9 @@ st.markdown("""
 
 # Define the data file path (backend only)
 DATA_FILE_PATH = r"./MONDES.xlsx"
-
 # Define backend configuration for user base metrics
-TOTAL_RIDERS = 3260  # Set your total rider pool size here
-TOTAL_PASSENGERS = 303  # Set your total passenger base here
+TOTAL_RIDERS = 3356  # Set your total rider pool size here
+TOTAL_PASSENGERS = 408  # Set your total passenger base here
 
 
 @st.cache_data
@@ -110,20 +109,15 @@ def calculate_cancellation_rate(df):
     if 'Trip Status' not in df.columns:
         return None
 
-    # Define cancelled statuses
     cancelled_statuses = [
         'Cancelled by Rider',
         'Cancelled by Driver at Pickup Location',
         'Cancelled by Driver'
     ]
 
-    # Count cancelled trips
     cancelled_trips = df[df['Trip Status'].isin(cancelled_statuses)].shape[0]
-
-    # Count all other statuses (excluding cancelled)
     other_statuses = df[~df['Trip Status'].isin(cancelled_statuses)].shape[0]
 
-    # Calculate cancellation rate
     if (cancelled_trips + other_statuses) > 0:
         cancellation_rate = (cancelled_trips / (cancelled_trips + other_statuses)) * 100
         return cancellation_rate
@@ -135,13 +129,9 @@ def calculate_passenger_search_timeout(df):
     if 'Trip Status' not in df.columns:
         return None
 
-    # Count expired trips
     expired_trips = df[df['Trip Status'] == 'Expired'].shape[0]
-
-    # Count all other statuses (excluding expired)
     other_statuses = df[df['Trip Status'] != 'Expired'].shape[0]
 
-    # Calculate timeout rate
     if (expired_trips + other_statuses) > 0:
         timeout_rate = (expired_trips / (expired_trips + other_statuses)) * 100
         return timeout_rate
@@ -153,8 +143,7 @@ def completed_vs_cancelled_daily(df):
     if 'Trip Status' not in df.columns or 'Trip Date' not in df.columns:
         return None
 
-    # Define completed and cancelled statuses
-    completed_status = ['Job Completed', 'Partner Assigned', 'Partner Arrived']  # Added 'Partner Arrived'
+    completed_status = ['Job Completed', 'Partner Assigned', 'Partner Arrived']
     cancelled_statuses = [
         'Cancelled by Rider',
         'Cancelled by Driver at Pickup Location',
@@ -162,11 +151,9 @@ def completed_vs_cancelled_daily(df):
     ]
     expired_status = ['Expired']
 
-    # Filter and group data
     df['Date'] = df['Trip Date'].dt.date
     daily_data = df.groupby(['Date', 'Trip Status']).size().unstack(fill_value=0)
 
-    # Sum completed, cancelled, and expired trips
     completed_cols = [col for col in daily_data.columns if any(status in str(col) for status in completed_status)]
     cancelled_cols = [col for col in daily_data.columns if any(status in str(col) for status in cancelled_statuses)]
     expired_cols = [col for col in daily_data.columns if any(status in str(col) for status in expired_status)]
@@ -186,7 +173,6 @@ def completed_vs_cancelled_daily(df):
     else:
         daily_data['Expired'] = 0
 
-    # Create the plot
     fig = go.Figure()
 
     fig.add_trace(go.Bar(
@@ -221,11 +207,6 @@ def completed_vs_cancelled_daily(df):
 
 
 def calculate_driver_retention_rate(total_riders, total_passengers, unique_drivers):
-    """
-    Calculate driver retention rate based on backend inputs
-    Formula: (Unique Drivers / Total Riders) * 100
-    Also calculates Driver-to-Passenger ratio
-    """
     if total_riders > 0:
         retention_rate = (unique_drivers / total_riders) * 100
     else:
@@ -319,7 +300,6 @@ def top_drivers_by_revenue(df):
 def passenger_insights(df):
     if 'Passenger' in df.columns:
         st.subheader("Top Passengers by Number of Trips")
-        # Filter completed trips for passengers (Job Completed status)
         completed_trips = df[df['Trip Status'] == 'Job Completed']
         top_passengers = completed_trips['Passenger'].value_counts().nlargest(10).reset_index()
         top_passengers.columns = ['Passenger', 'Trips']
@@ -342,7 +322,7 @@ def peak_hours(df):
 def trip_status_trends(df):
     if 'Trip Status' in df.columns and 'Trip Date' in df.columns:
         status_trends = df.groupby([df['Trip Date'].dt.date, 'Trip Status']).size().reset_index(name='Count')
-        fig = px.line(
+        fig = px.bar(
             status_trends,
             x='Trip Date',
             y='Count',
@@ -499,7 +479,7 @@ def distance_vs_revenue_scatter(df):
 
 def weekday_vs_weekend_analysis(df):
     if 'Trip Date' in df.columns and 'Trip Pay Amount Cleaned' in df.columns:
-        df['Is Weekend'] = df['Trip Date'].dt.dayofweek >= 5  # 5 and 6 are Saturday and Sunday
+        df['Is Weekend'] = df['Trip Date'].dt.dayofweek >= 5
         weekend_data = df.groupby('Is Weekend').agg({
             'Trip Pay Amount Cleaned': 'sum',
             'Distance': 'sum',
@@ -550,10 +530,8 @@ def passenger_value_segmentation(df):
         }).reset_index()
         passenger_stats.columns = ['Passenger', 'Total Spend', 'Number of Trips']
 
-        # Drop duplicates from Total Spend to avoid bin edge errors
         passenger_stats = passenger_stats.drop_duplicates(subset='Total Spend')
 
-        # Create segments
         passenger_stats['Segment'] = pd.qcut(passenger_stats['Total Spend'],
                                              q=3,
                                              labels=['Low', 'Medium', 'High'])
@@ -570,33 +548,25 @@ def passenger_value_segmentation(df):
 
 
 def get_download_data(df):
-    """Prepare the data for download with all cleaned columns"""
-    # Create a copy of the dataframe to avoid modifying the original
     download_df = df.copy()
-
-    # Add any additional processing if needed
     return download_df
 
 
 def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio):
-    """Create a PDF report of all dashboard metrics"""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
 
-    # Title
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(200, 10, txt="Union App Metrics Dashboard Report", ln=1, align='C')
     pdf.set_font("Arial", size=12)
     pdf.cell(200, 10, txt=f"Date Range: {date_range[0]} to {date_range[1]}", ln=1, align='C')
     pdf.ln(10)
 
-    # Overview Section
     pdf.set_font("Arial", 'B', 14)
     pdf.cell(200, 10, txt="1. Overview Metrics", ln=1)
     pdf.set_font("Arial", size=12)
 
-    # Calculate metrics
     total_trips = len(df)
     completed_trips = len(df[df['Trip Status'] == 'Job Completed'])
     avg_distance = df['Distance'].mean() if 'Distance' in df.columns else 0
@@ -605,7 +575,6 @@ def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio):
     unique_drivers = df['Driver'].nunique() if 'Driver' in df.columns else 0
     trips_per_driver = total_trips / unique_drivers if unique_drivers > 0 else 0
 
-    # Add metrics to PDF
     pdf.cell(200, 10, txt=f"Total Requests: {total_trips}", ln=1)
     pdf.cell(200, 10, txt=f"Completed Trips: {completed_trips}", ln=1)
     pdf.cell(200, 10, txt=f"Average Distance: {avg_distance:.1f} km", ln=1)
@@ -615,7 +584,6 @@ def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio):
     pdf.cell(200, 10, txt=f"Driver-to-Passenger Ratio: {passenger_ratio:.1f}", ln=1)
     pdf.cell(200, 10, txt=f"Average Trips per Driver: {trips_per_driver:.1f}", ln=1)
 
-    # Financial Section
     pdf.ln(10)
     pdf.set_font("Arial", 'B', 14)
     pdf.cell(200, 10, txt="2. Financial Metrics", ln=1)
@@ -641,7 +609,6 @@ def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio):
     pdf.cell(200, 10, txt=f"Fare per Kilometer/Mile: {fare_per_km:,.2f} UGX", ln=1)
     pdf.cell(200, 10, txt=f"Revenue Share (Company vs Driver): {revenue_share:.2f}%", ln=1)
 
-    # User Analysis Section
     pdf.ln(10)
     pdf.set_font("Arial", 'B', 14)
     pdf.cell(200, 10, txt="3. User Analysis Metrics", ln=1)
@@ -651,7 +618,6 @@ def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio):
     pdf.cell(200, 10, txt=f"Total Rider: {TOTAL_RIDERS}", ln=1)
     pdf.cell(200, 10, txt=f"Total Passengers: {TOTAL_PASSENGERS}", ln=1)
 
-    # Top Drivers
     pdf.ln(5)
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(200, 10, txt="Top 10 Drivers by Earnings:", ln=1)
@@ -664,11 +630,39 @@ def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio):
 
     return pdf
 
+def get_completed_trips_by_union_passengers(df, union_staff_names):
+    """
+    Given the trips DataFrame and a list of union staff names, returns a DataFrame with each staff and their number of completed trips.
+    """
+    if 'Trip Status' not in df.columns or 'Passenger' not in df.columns:
+        return pd.DataFrame(columns=['Union Staff', 'Completed Trips'])
+
+    completed_trips = df[df['Trip Status'] == 'Job Completed']
+    # Normalize names by stripping and lowercasing to improve matching robustness
+    completed_trips['Passenger_lower'] = completed_trips['Passenger'].astype(str).str.strip().str.lower()
+    staff_names_lower = [name.strip().lower() for name in union_staff_names]
+
+    # Count completed trips per passenger that is in union_staff_names
+    filtered_trips = completed_trips[completed_trips['Passenger_lower'].isin(staff_names_lower)]
+    trips_count = filtered_trips.groupby('Passenger_lower').size().reset_index(name='Completed Trips')
+
+    # Create full output DataFrame including all staff with 0 count if no trips
+    results = pd.DataFrame({'Union Staff': union_staff_names})
+    results['Union Staff_lower'] = results['Union Staff'].str.strip().str.lower()
+
+    # Merge counts to results
+    results = results.merge(trips_count, left_on='Union Staff_lower', right_on='Passenger_lower', how='left')
+    results['Completed Trips'] = results['Completed Trips'].fillna(0).astype(int)
+    results = results.drop(columns=['Union Staff_lower', 'Passenger_lower'])
+    return results
+
 
 def main():
     st.title("Union App Metrics Dashboard")
 
-    # Check if data file exists
+    # Define backend path for Union Staff Excel file
+    UNION_STAFF_FILE_PATH = r"./UNION STAFF.xlsx"# Change this to your backend path
+
     try:
         df = load_data()
 
@@ -676,7 +670,6 @@ def main():
             st.error("No data loaded - please check the backend data file")
             return
 
-        # Date filter
         if 'Trip Date' not in df.columns:
             st.error("No 'Trip Date' column found in the data")
             return
@@ -694,41 +687,26 @@ def main():
             df = df[(df['Trip Date'].dt.date >= date_range[0]) &
                     (df['Trip Date'].dt.date <= date_range[1])]
 
-        # Calculate unique drivers from data
         unique_drivers = df['Driver'].nunique() if 'Driver' in df.columns else 0
-
-        # Calculate driver retention metrics using backend-defined values
         retention_rate, passenger_ratio = calculate_driver_retention_rate(
             TOTAL_RIDERS, TOTAL_PASSENGERS, unique_drivers
         )
 
-        # Add download buttons to sidebar
+        # Prepare download buttons
         st.sidebar.markdown("---")
         st.sidebar.subheader("Export Data")
-
-        # Create a buffer to hold the Excel file
         output = io.BytesIO()
-
-        # Use ExcelWriter to write the DataFrame to the buffer
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             get_download_data(df).to_excel(writer, sheet_name='Dashboard Data', index=False)
-
-        # Get the Excel data from the buffer
         excel_data = output.getvalue()
-
-        # Create Excel download button
         st.sidebar.download_button(
             label="📊 Download Full Data (Excel)",
             data=excel_data,
             file_name=f"union_app_metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
-        # Create PDF report
         pdf = create_metrics_pdf(df, date_range, retention_rate, passenger_ratio)
         pdf_output = pdf.output(dest='S').encode('latin1')
-
-        # Create PDF download button
         st.sidebar.download_button(
             label="📄 Download Metrics Report (PDF)",
             data=pdf_output,
@@ -736,7 +714,6 @@ def main():
             mime="application/pdf"
         )
 
-        # Create tabs
         tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Financial", "User Analysis", "Geographic"])
 
         with tab1:  # Overview Tab
@@ -751,28 +728,24 @@ def main():
             with col3:
                 st.metric("Avg. Distance", f"{df['Distance'].mean():.1f} km" if 'Distance' in df.columns else "N/A")
             with col4:
-                # Calculate and display cancellation rate
                 cancellation_rate = calculate_cancellation_rate(df)
                 if cancellation_rate is not None:
                     st.metric("Driver Cancellation Rate", f"{cancellation_rate:.1f}%")
                 else:
                     st.metric("Driver Cancellation Rate", "N/A")
             with col5:
-                # Calculate and display passenger search timeout rate
                 timeout_rate = calculate_passenger_search_timeout(df)
                 if timeout_rate is not None:
                     st.metric("Passenger Search Timeout", f"{timeout_rate:.1f}%")
                 else:
                     st.metric("Passenger Search Timeout", "N/A")
 
-            # Display the completed vs cancelled vs expired trips chart
             status_breakdown_fig = completed_vs_cancelled_daily(df)
             if status_breakdown_fig:
                 st.plotly_chart(status_breakdown_fig, use_container_width=True)
             else:
                 st.warning("Could not generate trip status breakdown chart - missing required data")
 
-            # New metrics in Overview tab
             col6, col7, col8 = st.columns(3)
             with col6:
                 trips_per_driver(df)
@@ -792,7 +765,6 @@ def main():
         with tab2:  # Financial Tab
             st.header("Financial Performance")
 
-            # Financial metrics in columns
             col1, col2, col3 = st.columns(3)
             with col1:
                 total_revenue = df['Trip Pay Amount Cleaned'].sum()
@@ -818,7 +790,6 @@ def main():
             with col9:
                 st.metric("Total Riders (Pool Size)", TOTAL_RIDERS)
 
-            # Financial visualizations
             total_trips_by_type(df)
             payment_method_revenue(df)
             distance_vs_revenue_scatter(df)
@@ -827,7 +798,6 @@ def main():
         with tab3:  # User Analysis Tab
             st.header("User Performance")
 
-            # User metrics in columns
             col1, col2, col3 = st.columns(3)
             with col1:
                 unique_driver_count(df)
@@ -836,7 +806,6 @@ def main():
             with col3:
                 st.metric("Total Passengers (Base)", TOTAL_PASSENGERS)
 
-            # Display retention metrics
             col4, col5 = st.columns(2)
             with col4:
                 st.metric("Driver Retention Rate", f"{retention_rate:.1f}%",
@@ -845,12 +814,36 @@ def main():
                 st.metric("Passenger-to-Driver Ratio", f"{passenger_ratio:.1f}",
                           help="Number of passengers per active driver")
 
-            # User visualizations
             top_drivers_by_revenue(df)
             driver_performance_comparison(df)
             passenger_insights(df)
             passenger_value_segmentation(df)
             top_10_drivers_by_earnings(df)
+
+            # Union Staff trips table - passenger based
+            st.markdown("---")
+            st.subheader("Union Staff Trip Completion")
+
+            try:
+                if os.path.exists(UNION_STAFF_FILE_PATH):
+                    union_staff_df = pd.read_excel(UNION_STAFF_FILE_PATH)
+                    # Assume first column is staff names
+                    if union_staff_df.empty or union_staff_df.shape[1] == 0:
+                        st.warning("Union Staff file is empty or does not contain columns.")
+                    else:
+                        union_staff_names = union_staff_df.iloc[:, 0].dropna().astype(str).tolist()
+                        st.metric("Total Union Staff Members", len(union_staff_names))
+
+                        staff_trips_df = get_completed_trips_by_union_passengers(df, union_staff_names)
+                        if not staff_trips_df.empty:
+                            st.dataframe(staff_trips_df)
+                        else:
+                            st.info("No matching completed trips found for Union Staff members.")
+                else:
+                    st.info(f"Union Staff file not found at: {UNION_STAFF_FILE_PATH}")
+
+            except Exception as e:
+                st.error(f"Error processing Union Staff file: {e}")
 
         with tab4:  # Geographic Tab
             st.header("Geographic Analysis")
@@ -866,11 +859,9 @@ def main():
 
 
 if __name__ == "__main__":
-    # Create data directory if it doesn't exist
     if not os.path.exists("data"):
         os.makedirs("data")
 
-    # Check if data file exists
     if not os.path.exists(DATA_FILE_PATH):
         st.warning(f"Please place your Excel data file at: {DATA_FILE_PATH}")
     else:
