@@ -52,8 +52,8 @@ st.markdown("""
 DATA_FILE_PATH = r"./MONDES.xlsx"
 
 # Define backend configuration for user base metrics
-TOTAL_RIDERS = 3064  # Set your total rider pool size here
-TOTAL_PASSENGERS = 194  # Set your total passenger base here
+TOTAL_RIDERS = 3260  # Set your total rider pool size here
+TOTAL_PASSENGERS = 303  # Set your total passenger base here
 
 
 @st.cache_data
