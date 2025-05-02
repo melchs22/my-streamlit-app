@@ -49,7 +49,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Define the data file path (backend only)
-DATA_FILE_PATH = r"./MARIA.xlsx"
+DATA_FILE_PATH = r"./MONDES.xlsx"
 
 # Define backend configuration for user base metrics
 TOTAL_RIDERS = 3064  # Set your total rider pool size here
@@ -154,7 +154,7 @@ def completed_vs_cancelled_daily(df):
         return None
 
     # Define completed and cancelled statuses
-    completed_status = ['Job Completed', 'Partner Assigned']
+    completed_status = ['Job Completed', 'Partner Assigned', 'Partner Arrived']  # Added 'Partner Arrived'
     cancelled_statuses = [
         'Cancelled by Rider',
         'Cancelled by Driver at Pickup Location',
