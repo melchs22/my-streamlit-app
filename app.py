@@ -550,6 +550,9 @@ def passenger_value_segmentation(df):
         }).reset_index()
         passenger_stats.columns = ['Passenger', 'Total Spend', 'Number of Trips']
 
+        # Drop duplicates from Total Spend to avoid bin edge errors
+        passenger_stats = passenger_stats.drop_duplicates(subset='Total Spend')
+
         # Create segments
         passenger_stats['Segment'] = pd.qcut(passenger_stats['Total Spend'],
                                              q=3,
