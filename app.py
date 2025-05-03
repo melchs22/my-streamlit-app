@@ -609,7 +609,7 @@ def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio, app_down
 
     # Add header image
     try:
-        pdf.image(r"./your_imge.png", x=10, y=4, w=40)
+        pdf.image(r"./your_image.png", x=10, y=4, w=40)
         pdf.ln(40)  # Move down after image
     except:
         st.warning("Could not add image to PDF")
