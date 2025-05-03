@@ -19,7 +19,7 @@ OPENCAGE_API_KEY = os.getenv('OPENCAGE_API_KEY')
 # Configure page
 st.set_page_config(
     page_title="Union App Metrics Dashboard",
-    page_icon= r"./your_imge.png",
+    page_icon=r"./your_imge.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -48,17 +48,67 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Define the data file path (backend only)
-DATA_FILE_PATH = r"./MONDES.xlsx"
-# Define backend configuration for user base metrics
-TOTAL_RIDERS = 3356  # Set your total rider pool size here
-TOTAL_PASSENGERS = 408  # Set your total passenger base here
+PASSENGERS_FILE_PATH = r"./PASSENGERS.xlsx"
+DRIVERS_FILE_PATH = r"./DRIVERS.xlsx"
+DATA_FILE_PATH = r"./BEER.xlsx"
 
 
-@st.cache_data
+# Function to load passengers data
+def load_passengers_data():
+    try:
+        df = pd.read_excel(PASSENGERS_FILE_PATH)
+        return df
+    except Exception as e:
+        st.error(f"Error loading passengers data: {str(e)}")
+        return pd.DataFrame()
+
+
+# Function to load drivers data
+def load_drivers_data():
+    try:
+        df = pd.read_excel(DRIVERS_FILE_PATH)
+        return df
+    except Exception as e:
+        st.error(f"Error loading drivers data: {str(e)}")
+        return pd.DataFrame()
+
+
+# Function to calculate passenger metrics
+def passenger_metrics(passengers_df):
+    if passengers_df.empty:
+        return 0, 0
+
+    # Passenger App Downloads
+    passengers_df['Created Time'] = pd.to_datetime(passengers_df['Created Time'], errors='coerce')
+    app_downloads = passengers_df['Name'].count()  # Count non-null names
+
+    # Passenger Wallet Balance
+    wallet_balance = passengers_df['Wallet Balance'].sum()
+
+    return app_downloads, wallet_balance
+
+
+# Function to calculate driver metrics
+def driver_metrics(drivers_df):
+    if drivers_df.empty:
+        return 0, 0, 0
+
+    # Riders Onboarded
+    drivers_df['Created Time'] = pd.to_datetime(drivers_df['Created Time'], errors='coerce')
+    riders_onboarded = drivers_df['Name'].count()  # Count non-null names
+
+    # Driver Wallet Balance (sum of positive values)
+    driver_wallet_balance = drivers_df[drivers_df['Wallet Balance'] > 0]['Wallet Balance'].sum()
+
+    # Commission Owed (sum of negative values)
+    commission_owed = drivers_df[drivers_df['Wallet Balance'] < 0]['Wallet Balance'].sum() * -1
+
+    return riders_onboarded, driver_wallet_balance, commission_owed
+
+
 def load_data():
     try:
-        # Load data from the predefined backend file path
+        # Load data from the predefined backend file path with no caching
         df = pd.read_excel(DATA_FILE_PATH)
 
         # Data cleaning
@@ -206,14 +256,14 @@ def completed_vs_cancelled_daily(df):
     return fig
 
 
-def calculate_driver_retention_rate(total_riders, total_passengers, unique_drivers):
-    if total_riders > 0:
-        retention_rate = (unique_drivers / total_riders) * 100
+def calculate_driver_retention_rate(riders_onboarded, app_downloads, unique_drivers):
+    if riders_onboarded > 0:
+        retention_rate = (unique_drivers / riders_onboarded) * 100
     else:
         retention_rate = 0
 
     if unique_drivers > 0:
-        passenger_ratio = total_passengers / unique_drivers
+        passenger_ratio = app_downloads / unique_drivers
     else:
         passenger_ratio = 0
 
@@ -552,10 +602,18 @@ def get_download_data(df):
     return download_df
 
 
-def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio):
+def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio, app_downloads, riders_onboarded,
+                       passenger_wallet_balance, driver_wallet_balance, commission_owed):
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", size=12)
+
+    # Add header image
+    try:
+        pdf.image(r"./your_imge.png", x=10, y=4, w=40)
+        pdf.ln(40)  # Move down after image
+    except:
+        st.warning("Could not add image to PDF")
+        pdf.ln(20)
 
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(200, 10, txt="Union App Metrics Dashboard Report", ln=1, align='C')
@@ -580,8 +638,10 @@ def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio):
     pdf.cell(200, 10, txt=f"Average Distance: {avg_distance:.1f} km", ln=1)
     pdf.cell(200, 10, txt=f"Driver Cancellation Rate: {cancellation_rate:.1f}%", ln=1)
     pdf.cell(200, 10, txt=f"Passenger Search Timeout: {timeout_rate:.1f}%", ln=1)
+    pdf.cell(200, 10, txt=f"Passenger App Downloads: {app_downloads}", ln=1)
+    pdf.cell(200, 10, txt=f"Riders Onboarded: {riders_onboarded}", ln=1)
     pdf.cell(200, 10, txt=f"Driver Retention Rate: {retention_rate:.1f}%", ln=1)
-    pdf.cell(200, 10, txt=f"Driver-to-Passenger Ratio: {passenger_ratio:.1f}", ln=1)
+    pdf.cell(200, 10, txt=f"Passenger-to-Driver Ratio: {passenger_ratio:.1f}", ln=1)
     pdf.cell(200, 10, txt=f"Average Trips per Driver: {trips_per_driver:.1f}", ln=1)
 
     pdf.ln(10)
@@ -602,6 +662,9 @@ def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio):
     pdf.cell(200, 10, txt=f"Total Value of Rides: {total_revenue:,.0f} UGX", ln=1)
     pdf.cell(200, 10, txt=f"Total Commission: {total_commission:,.0f} UGX", ln=1)
     pdf.cell(200, 10, txt=f"Rider Revenue: {gross_profit:,.0f} UGX", ln=1)
+    pdf.cell(200, 10, txt=f"Passenger Wallet Balance: {passenger_wallet_balance:,.0f} UGX", ln=1)
+    pdf.cell(200, 10, txt=f"Driver Wallet Balance: {driver_wallet_balance:,.0f} UGX", ln=1)
+    pdf.cell(200, 10, txt=f"Commission Owed: {commission_owed:,.0f} UGX", ln=1)
     pdf.cell(200, 10, txt=f"Average Revenue per Trip: {avg_revenue:,.0f} UGX", ln=1)
     pdf.cell(200, 10, txt=f"Average Commission per Trip: {avg_commission:,.0f} UGX", ln=1)
     pdf.cell(200, 10, txt=f"Revenue per Driver: {revenue_per_driver:,.0f} UGX", ln=1)
@@ -615,8 +678,8 @@ def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio):
     pdf.set_font("Arial", size=12)
 
     pdf.cell(200, 10, txt=f"Number of Unique Drivers: {unique_drivers}", ln=1)
-    pdf.cell(200, 10, txt=f"Total Rider: {TOTAL_RIDERS}", ln=1)
-    pdf.cell(200, 10, txt=f"Total Passengers: {TOTAL_PASSENGERS}", ln=1)
+    pdf.cell(200, 10, txt=f"Passenger App Downloads: {app_downloads}", ln=1)
+    pdf.cell(200, 10, txt=f"Riders Onboarded: {riders_onboarded}", ln=1)
 
     pdf.ln(5)
     pdf.set_font("Arial", 'B', 12)
@@ -629,6 +692,7 @@ def create_metrics_pdf(df, date_range, retention_rate, passenger_ratio):
             pdf.cell(200, 7, txt=f"{i}. {driver}: {amount:,.0f} UGX", ln=1)
 
     return pdf
+
 
 def get_completed_trips_by_union_passengers(df, union_staff_names):
     """
@@ -659,12 +723,16 @@ def get_completed_trips_by_union_passengers(df, union_staff_names):
 
 def main():
     st.title("Union App Metrics Dashboard")
-
     # Define backend path for Union Staff Excel file
-    UNION_STAFF_FILE_PATH = r"./UNION STAFF.xlsx"# Change this to your backend path
+    UNION_STAFF_FILE_PATH = r"C:\Users\TUTU\Downloads\UNION STAFF.xlsx"  # Change this to your backend path
 
     try:
+        # Clear any cached data to ensure fresh load
+        st.cache_data.clear()
+
         df = load_data()
+        df_passengers = load_passengers_data()
+        df_drivers = load_drivers_data()
 
         if df.empty:
             st.error("No data loaded - please check the backend data file")
@@ -673,6 +741,10 @@ def main():
         if 'Trip Date' not in df.columns:
             st.error("No 'Trip Date' column found in the data")
             return
+
+        # Calculate passenger and driver metrics
+        app_downloads, passenger_wallet_balance = passenger_metrics(df_passengers)
+        riders_onboarded, driver_wallet_balance, commission_owed = driver_metrics(df_drivers)
 
         min_date = df['Trip Date'].min().date()
         max_date = df['Trip Date'].max().date()
@@ -689,7 +761,7 @@ def main():
 
         unique_drivers = df['Driver'].nunique() if 'Driver' in df.columns else 0
         retention_rate, passenger_ratio = calculate_driver_retention_rate(
-            TOTAL_RIDERS, TOTAL_PASSENGERS, unique_drivers
+            riders_onboarded, app_downloads, unique_drivers
         )
 
         # Prepare download buttons
@@ -705,7 +777,9 @@ def main():
             file_name=f"union_app_metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-        pdf = create_metrics_pdf(df, date_range, retention_rate, passenger_ratio)
+        pdf = create_metrics_pdf(df, date_range, retention_rate, passenger_ratio,
+                                 app_downloads, riders_onboarded, passenger_wallet_balance,
+                                 driver_wallet_balance, commission_owed)
         pdf_output = pdf.output(dest='S').encode('latin1')
         st.sidebar.download_button(
             label="📄 Download Metrics Report (PDF)",
@@ -750,11 +824,9 @@ def main():
             with col6:
                 trips_per_driver(df)
             with col7:
-                st.metric("Driver Retention Rate", f"{retention_rate:.1f}%",
-                          help="Percentage of total riders who are active drivers")
+                st.metric("Passenger App Downloads", app_downloads)
             with col8:
-                st.metric("Driver-to-Passenger Ratio", f"{passenger_ratio:.1f}",
-                          help="Number of passengers per active driver")
+                st.metric("Riders Onboarded", riders_onboarded)
 
             total_trips_by_status(df)
             total_distance_covered(df)
@@ -776,19 +848,25 @@ def main():
 
             col4, col5, col6 = st.columns(3)
             with col4:
-                avg_commission_per_trip(df)
+                st.metric("Passenger Wallet Balance", f"{passenger_wallet_balance:,.0f} UGX")
             with col5:
-                revenue_per_driver(df)
+                st.metric("Driver Wallet Balance", f"{driver_wallet_balance:,.0f} UGX")
             with col6:
-                driver_earnings_per_trip(df)
+                st.metric("Commission Owed", f"{commission_owed:,.0f} UGX")
 
             col7, col8, col9 = st.columns(3)
             with col7:
-                fare_per_km(df)
+                avg_commission_per_trip(df)
             with col8:
-                revenue_share(df)
+                revenue_per_driver(df)
             with col9:
-                st.metric("Total Riders (Pool Size)", TOTAL_RIDERS)
+                driver_earnings_per_trip(df)
+
+            col10, col11 = st.columns(2)
+            with col10:
+                fare_per_km(df)
+            with col11:
+                revenue_share(df)
 
             total_trips_by_type(df)
             payment_method_revenue(df)
@@ -802,14 +880,14 @@ def main():
             with col1:
                 unique_driver_count(df)
             with col2:
-                st.metric("Total Riders (Pool Size)", TOTAL_RIDERS)
+                st.metric("Passenger App Downloads", app_downloads)
             with col3:
-                st.metric("Total Passengers (Base)", TOTAL_PASSENGERS)
+                st.metric("Riders Onboarded", riders_onboarded)
 
             col4, col5 = st.columns(2)
             with col4:
                 st.metric("Driver Retention Rate", f"{retention_rate:.1f}%",
-                          help="Percentage of total riders who are active drivers")
+                          help="Percentage of onboarded riders who are active drivers")
             with col5:
                 st.metric("Passenger-to-Driver Ratio", f"{passenger_ratio:.1f}",
                           help="Number of passengers per active driver")
@@ -861,8 +939,4 @@ def main():
 if __name__ == "__main__":
     if not os.path.exists("data"):
         os.makedirs("data")
-
-    if not os.path.exists(DATA_FILE_PATH):
-        st.warning(f"Please place your Excel data file at: {DATA_FILE_PATH}")
-    else:
-        main()
+    main()
