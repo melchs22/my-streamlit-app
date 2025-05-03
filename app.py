@@ -19,7 +19,7 @@ OPENCAGE_API_KEY = os.getenv('OPENCAGE_API_KEY')
 # Configure page
 st.set_page_config(
     page_title="Union App Metrics Dashboard",
-    page_icon=r"./your_imge.png",
+    page_icon=r"C:\Users\TUTU\PyCharmMiscProject\your_image.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -53,20 +53,32 @@ DRIVERS_FILE_PATH = r"./DRIVERS.xlsx"
 DATA_FILE_PATH = r"./BEER.xlsx"
 
 
-# Function to load passengers data
-def load_passengers_data():
+# Function to load passengers data with date filtering
+def load_passengers_data(date_range=None):
     try:
         df = pd.read_excel(PASSENGERS_FILE_PATH)
+        df['Created Time'] = pd.to_datetime(df['Created Time'], errors='coerce')
+
+        if date_range and len(date_range) == 2:
+            start_date, end_date = date_range
+            df = df[(df['Created Time'].dt.date >= start_date) &
+                    (df['Created Time'].dt.date <= end_date)]
         return df
     except Exception as e:
         st.error(f"Error loading passengers data: {str(e)}")
         return pd.DataFrame()
 
 
-# Function to load drivers data
-def load_drivers_data():
+# Function to load drivers data with date filtering
+def load_drivers_data(date_range=None):
     try:
         df = pd.read_excel(DRIVERS_FILE_PATH)
+        df['Created Time'] = pd.to_datetime(df['Created Time'], errors='coerce')
+
+        if date_range and len(date_range) == 2:
+            start_date, end_date = date_range
+            df = df[(df['Created Time'].dt.date >= start_date) &
+                    (df['Created Time'].dt.date <= end_date)]
         return df
     except Exception as e:
         st.error(f"Error loading drivers data: {str(e)}")
@@ -723,16 +735,41 @@ def get_completed_trips_by_union_passengers(df, union_staff_names):
 
 def main():
     st.title("Union App Metrics Dashboard")
-    # Define backend path for Union Staff Excel file
-    UNION_STAFF_FILE_PATH = r"./UNION STAFF.xlsx"  # Change this to your backend path
+    UNION_STAFF_FILE_PATH = r"./UNION STAFF.xlsx"
 
     try:
         # Clear any cached data to ensure fresh load
         st.cache_data.clear()
 
+        # Get date range first
+        min_date = datetime(2023, 1, 1).date()  # Default minimum date
+        max_date = datetime.now().date()  # Default maximum date
+
+        # Try to get min/max dates from trip data if available
+        try:
+            df = load_data()
+            if not df.empty and 'Trip Date' in df.columns:
+                min_date = df['Trip Date'].min().date()
+                max_date = df['Trip Date'].max().date()
+        except:
+            pass
+
+        date_range = st.sidebar.date_input(
+            "Date Range",
+            value=[min_date, max_date],
+            min_value=min_date,
+            max_value=max_date
+        )
+
+        # Load all data with date filtering
         df = load_data()
-        df_passengers = load_passengers_data()
-        df_drivers = load_drivers_data()
+        if len(date_range) == 2:
+            df = df[(df['Trip Date'].dt.date >= date_range[0]) &
+                    (df['Trip Date'].dt.date <= date_range[1])]
+
+        # Load passenger and driver data with the same date filtering
+        df_passengers = load_passengers_data(date_range)
+        df_drivers = load_drivers_data(date_range)
 
         if df.empty:
             st.error("No data loaded - please check the backend data file")
@@ -742,22 +779,9 @@ def main():
             st.error("No 'Trip Date' column found in the data")
             return
 
-        # Calculate passenger and driver metrics
+        # Calculate passenger and driver metrics with filtered data
         app_downloads, passenger_wallet_balance = passenger_metrics(df_passengers)
         riders_onboarded, driver_wallet_balance, commission_owed = driver_metrics(df_drivers)
-
-        min_date = df['Trip Date'].min().date()
-        max_date = df['Trip Date'].max().date()
-        date_range = st.sidebar.date_input(
-            "Date Range",
-            value=[min_date, max_date],
-            min_value=min_date,
-            max_value=max_date
-        )
-
-        if len(date_range) == 2:
-            df = df[(df['Trip Date'].dt.date >= date_range[0]) &
-                    (df['Trip Date'].dt.date <= date_range[1])]
 
         unique_drivers = df['Driver'].nunique() if 'Driver' in df.columns else 0
         retention_rate, passenger_ratio = calculate_driver_retention_rate(
